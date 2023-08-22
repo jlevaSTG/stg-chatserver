@@ -16,7 +16,8 @@ import (
 type CommandHandler func(cmd Command) error
 
 const (
-	InitChatCommandType = "init-chat"
+	DisconnectClientCommandType = "disconnect-cmd"
+	InitChatCommandType         = "init-chat-cmd"
 )
 
 func GetCollection(client *mongo.Client, collectionName string) *mongo.Collection {
@@ -39,6 +40,10 @@ type InitChatCommand struct {
 	Message      string              `json:"message"`
 }
 
+type DisconnectCommand struct {
+	ClientID string `json:"id"`
+}
+
 func (cmd *InitChatCommand) participantsIds() []string {
 	ids := make([]string, len(cmd.Participants))
 	for _, p := range cmd.Participants {
@@ -50,7 +55,30 @@ func (cmd *InitChatCommand) participantsIds() []string {
 func SetUpCommandHandlers(m *Manager) map[string]CommandHandler {
 	handlers := make(map[string]CommandHandler)
 	handlers[InitChatCommandType] = InitChatCommandHandlers(m)
+	handlers[DisconnectClientCommandType] = removeClientCommandHandlers(m)
 	return handlers
+}
+
+func removeClientCommandHandlers(m *Manager) CommandHandler {
+	return func(cmd Command) error {
+		var disconnect DisconnectCommand
+		if err := json.Unmarshal(cmd.Payload, &disconnect); err != nil {
+			return err
+		}
+
+		clientId := disconnect.ClientID
+		m.Lock()
+		client := m.clients[clientId]
+		delete(m.clients, clientId)
+		m.Unlock()
+
+		err := client.Connection.Close()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
 
 func InitChatCommandHandlers(m *Manager) CommandHandler {
@@ -69,7 +97,7 @@ func InitChatCommandHandlers(m *Manager) CommandHandler {
 		sort.Strings(ids)
 		// Check if a chat session with these participants already exists
 		var existingSession model.ChatSession
-		err := collection.FindOne(dbCtx, bson.M{"participants": ids}).Decode(&existingSession)
+		err := collection.FindOne(dbCtx, bson.M{"participants.id": bson.M{"$in": ids}}).Decode(&existingSession)
 
 		if err != nil {
 			if errors.Is(err, mongo.ErrNoDocuments) {

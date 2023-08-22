@@ -66,13 +66,13 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 	m.clients[newClient.Id] = newClient
 	m.Unlock()
 
-	newClient.StartWriteLoop()
+	newClient.StartWriteLoop(m.commandStream)
 	newClient.StartReadLoop(m.commandStream)
 
 	msg := messages.Message{
 		MessageType: messages.ConnectionStatus,
 		CreatedAt:   time.Now(),
-		Payload: messages.UserConnected{
+		Payload: messages.UserConnectionStatus{
 			ClientID:        newClient.Id,
 			ConnectedStatus: messages.Connected,
 		},

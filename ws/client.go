@@ -34,25 +34,20 @@ func NewClient(id string, connection *websocket.Conn) *Client {
 
 }
 
-func (c *Client) StartReadLoop(eventStream chan Command) {
+func (c *Client) StartReadLoop(cmdStream chan Command) {
 	go func() {
 		defer func() {
-			//todo: publish a remove client cmd to event stream
-			//err := m.RemoveSubscription(s)
-			//if err != nil {
-			//	log.Println("Failed to remove subscription:", err)
-			//}
+			c.disconnect(cmdStream)
 		}()
 
-		//if err := c.Connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		//	log.Println(err)
-		//	return
-		//}
-		//
-		//c.Connection.SetPongHandler(func(appData string) error {
-		//	//log.Println("pong received")
-		//	return c.Connection.SetReadDeadline(time.Now().Add(pongWait))
-		//})
+		if err := c.Connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			log.Println(err)
+			return
+		}
+
+		c.Connection.SetPongHandler(func(appData string) error {
+			return c.Connection.SetReadDeadline(time.Now().Add(pongWait))
+		})
 
 		for {
 			_, payload, err := c.Connection.ReadMessage()
@@ -66,21 +61,16 @@ func (c *Client) StartReadLoop(eventStream chan Command) {
 			if err := json.Unmarshal(payload, &cmd); err != nil {
 				log.Printf("error marshalling message: %v", err)
 			}
-			eventStream <- cmd
+			cmdStream <- cmd
 		}
 	}()
 }
 
-func (c *Client) StartWriteLoop() {
+func (c *Client) StartWriteLoop(cmdStream chan Command) {
 	ticker := time.NewTicker(pingInterval)
-
 	go func() {
 		defer func() {
 			ticker.Stop()
-			//err := m.RemoveSubscription(sub)
-			//if err != nil {
-			//	return
-			//}
 		}()
 		for {
 			select {
@@ -100,7 +90,6 @@ func (c *Client) StartWriteLoop() {
 				}
 				log.Println("sent message")
 			case <-ticker.C:
-
 				if err := c.Connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Println("write Msg: ", err)
 					return
@@ -108,4 +97,13 @@ func (c *Client) StartWriteLoop() {
 			}
 		}
 	}()
+}
+
+func (c *Client) disconnect(cmdStream chan Command) {
+	data, err := json.Marshal(DisconnectCommand{ClientID: c.Id})
+	if err != nil {
+		log.Println(err)
+	}
+	cmd := Command{CommandType: DisconnectClientCommandType, Payload: data}
+	cmdStream <- cmd
 }

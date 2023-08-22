@@ -16,7 +16,7 @@ type Message struct {
 	Payload     interface{} `json:"payload"`
 }
 
-type UserConnected struct {
+type UserConnectionStatus struct {
 	ClientID        string `json:"client_id"`
 	ConnectedStatus string `json:"connected_status"`
 }
