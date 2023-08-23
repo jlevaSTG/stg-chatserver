@@ -12,7 +12,6 @@ type CommandHandler func(cmd Command) error
 
 const (
 	DisconnectClientCommandType = "disconnect-cmd"
-	InitChatCommandType         = "init-chat-cmd"
 	TextMessageCommandType      = "text-message-cmd"
 )
 
@@ -64,7 +63,6 @@ func (cmd *InitChatCommand) ParticipantsIds() []string {
 
 func SetUpCommandHandlers(m *Manager) map[string]CommandHandler {
 	handlers := make(map[string]CommandHandler)
-	handlers[InitChatCommandType] = InitChatCommandHandlers(m)
 	handlers[DisconnectClientCommandType] = removeClientCommandHandlers(m)
 	handlers[TextMessageCommandType] = handleTextMessageCommand(m)
 	return handlers
@@ -90,7 +88,6 @@ func handleTextMessageCommand(m *Manager) CommandHandler {
 		default:
 			return errors.New("text command sent with wrong payload type")
 		}
-
 		return nil
 	}
 }
@@ -119,32 +116,5 @@ func removeClientCommandHandlers(m *Manager) CommandHandler {
 		//log.Info().Msgf("manager current client count: %d, clients %v", m.currentClientCount, m.clients)
 		return nil
 	}
-}
 
-func InitChatCommandHandlers(m *Manager) CommandHandler {
-	return func(cmd Command) error {
-		//var initCmd InitChatCommand
-		//if err := json.Unmarshal(cmd.Payload, &initCmd); err != nil {
-		//	return err
-		//}
-		//log.Info().Msgf("init chat for cmd: %v", initCmd)
-		//
-		//chatMsg := messages.ChatMessage{
-		//	ChatId:  s.ChatId,
-		//	SentBy:  s.CreatedBy,
-		//	Message: initCmd.Message,
-		//}
-		//
-		//clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)
-		//
-		//for _, p := range initCmd.Participants {
-		//	c, ok := m.clients[p.ID]
-		//	if ok {
-		//		c.Egress <- clientMsg
-		//	}
-		//}
-
-		return nil
-
-	}
 }

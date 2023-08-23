@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
@@ -27,7 +28,7 @@ func main() {
 
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
 	opts := options.Client().ApplyURI("mongodb+srv://jleva:Wcdw8TzyKcGfgdzU@stg-chat.bio6fv4.mongodb.net/?retryWrites=true&w=majority").SetServerAPIOptions(serverAPI)
-
+	// Create a new client and connect to the server
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {
 		panic(err)
@@ -37,6 +38,10 @@ func main() {
 			panic(err)
 		}
 	}()
+	// Send a ping to confirm a successful connection
+	if err := client.Database("stg-chat").RunCommand(context.TODO(), bson.D{{"ping", 1}}).Err(); err != nil {
+		panic(err)
+	}
 
 	s, err := api.NewServer(config, ws.NewManager(client))
 	if err != nil {
