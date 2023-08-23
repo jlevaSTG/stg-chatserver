@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
+	"stg-go-websocket-server/routes"
 	"stg-go-websocket-server/util"
 	"stg-go-websocket-server/ws"
 	"strings"
@@ -32,10 +33,9 @@ func (s *Server) setupRouter() {
 		}
 	})
 	r.Use(static.Serve("/", static.LocalFile("ws-front-end/dist/", true)))
-
 	api := r.Group("/ws")
 	api.GET("", s.manager.HandleWS)
-
+	routes.SetupApiRoutes("/api", r, s.manager)
 	s.router = r
 }
 

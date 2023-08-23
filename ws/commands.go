@@ -1,14 +1,9 @@
 package ws
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
-	"github.com/rs/zerolog/log"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"sort"
-	"stg-go-websocket-server/model"
+	"stg-go-websocket-server/messages"
 	"stg-go-websocket-server/types"
 	"time"
 )
@@ -18,6 +13,7 @@ type CommandHandler func(cmd Command) error
 const (
 	DisconnectClientCommandType = "disconnect-cmd"
 	InitChatCommandType         = "init-chat-cmd"
+	TextMessageCommandType      = "text-message-cmd"
 )
 
 func GetCollection(client *mongo.Client, collectionName string) *mongo.Collection {
@@ -26,10 +22,17 @@ func GetCollection(client *mongo.Client, collectionName string) *mongo.Collectio
 }
 
 type Command struct {
-	CommandType      string          `json:"cmd-type"`
-	CommandTimeStamp string          `json:"cmd-time-stamp"`
-	CommandIssuer    string          `json:"command-issuer"`
-	Payload          json.RawMessage `json:"payload"`
+	CommandType   string      `json:"cmd-type"`
+	CommandIssuer string      `json:"command-issuer"`
+	Payload       interface{} `json:"payload"`
+}
+
+func NewCommand(commandType string, commandIssuer string, payload interface{}) Command {
+	return Command{
+		CommandType:   commandType,
+		CommandIssuer: commandIssuer,
+		Payload:       payload,
+	}
 }
 
 type InitChatCommand struct {
@@ -40,14 +43,21 @@ type InitChatCommand struct {
 	Message      string              `json:"message"`
 }
 
+type TextMessageCommand struct {
+	CreatedBy       string              `json:"created_by"`
+	ChatID          string              `json:"chat_id"`
+	ParticipantsIds []types.Participant `json:"participants"`
+	Message         string              `json:"message"`
+}
+
 type DisconnectCommand struct {
 	ClientID string `json:"id"`
 }
 
-func (cmd *InitChatCommand) participantsIds() []string {
+func (cmd *InitChatCommand) ParticipantsIds() []string {
 	ids := make([]string, len(cmd.Participants))
-	for _, p := range cmd.Participants {
-		ids = append(ids, p.ID)
+	for i, p := range cmd.Participants {
+		ids[i] = p.ID
 	}
 	return ids
 }
@@ -56,98 +66,85 @@ func SetUpCommandHandlers(m *Manager) map[string]CommandHandler {
 	handlers := make(map[string]CommandHandler)
 	handlers[InitChatCommandType] = InitChatCommandHandlers(m)
 	handlers[DisconnectClientCommandType] = removeClientCommandHandlers(m)
+	handlers[TextMessageCommandType] = handleTextMessageCommand(m)
 	return handlers
+}
+
+func handleTextMessageCommand(m *Manager) CommandHandler {
+	return func(cmd Command) error {
+		switch payload := cmd.Payload.(type) {
+		case TextMessageCommand:
+			chatMsg := messages.ChatMessage{
+				ChatId:  payload.ChatID,
+				SentBy:  payload.CreatedBy,
+				Message: payload.Message,
+			}
+
+			clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)
+			for _, p := range payload.ParticipantsIds {
+				c, ok := m.clients[p.ID]
+				if ok {
+					c.Egress <- clientMsg
+				}
+			}
+		default:
+			return errors.New("text command sent with wrong payload type")
+		}
+
+		return nil
+	}
 }
 
 func removeClientCommandHandlers(m *Manager) CommandHandler {
 	return func(cmd Command) error {
-		var disconnect DisconnectCommand
-		if err := json.Unmarshal(cmd.Payload, &disconnect); err != nil {
-			return err
-		}
-
-		clientId := disconnect.ClientID
-		m.Lock()
-		client := m.clients[clientId]
-		delete(m.clients, clientId)
-		m.Unlock()
-
-		err := client.Connection.Close()
-		if err != nil {
-			return err
-		}
-
+		//var disconnect DisconnectCommand
+		//if err := json.Unmarshal(cmd.Payload, &disconnect); err != nil {
+		//	return err
+		//}
+		//
+		//clientId := disconnect.ClientID
+		//log.Info().Msgf("removing client %s\n", clientId)
+		//
+		//m.Lock()
+		//client, ok := m.clients[clientId]
+		//if ok {
+		//	delete(m.clients, clientId)
+		//	err := client.Connection.Close()
+		//	if err != nil {
+		//		return err
+		//	}
+		//}
+		//m.currentClientCount--
+		//m.Unlock()
+		//log.Info().Msgf("manager current client count: %d, clients %v", m.currentClientCount, m.clients)
 		return nil
 	}
 }
 
 func InitChatCommandHandlers(m *Manager) CommandHandler {
 	return func(cmd Command) error {
-		var initCmd InitChatCommand
-		if err := json.Unmarshal(cmd.Payload, &initCmd); err != nil {
-			return err
-		}
-
-		dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		collection := GetCollection(m.mongoClient, "chat_sessions")
-		// Sort the participants to ensure consistent query
-		ids := initCmd.participantsIds()
-		sort.Strings(ids)
-		// Check if a chat session with these participants already exists
-		var existingSession model.ChatSession
-		err := collection.FindOne(dbCtx, bson.M{"participants.id": bson.M{"$in": ids}}).Decode(&existingSession)
-
-		if err != nil {
-			if errors.Is(err, mongo.ErrNoDocuments) {
-				// No existing session, go ahead to create new one
-				// Your code for creating new session
-				s := model.NewChatSession(m.IdCreator(), initCmd.CreatedBy, initCmd.Participants)
-				_, err := collection.InsertOne(dbCtx, s)
-				if err != nil {
-					log.Err(err)
-					return err
-				}
-
-			}
-		}
-		// Existing session found send messages
+		//var initCmd InitChatCommand
+		//if err := json.Unmarshal(cmd.Payload, &initCmd); err != nil {
+		//	return err
+		//}
+		//log.Info().Msgf("init chat for cmd: %v", initCmd)
+		//
+		//chatMsg := messages.ChatMessage{
+		//	ChatId:  s.ChatId,
+		//	SentBy:  s.CreatedBy,
+		//	Message: initCmd.Message,
+		//}
+		//
+		//clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)
+		//
+		//for _, p := range initCmd.Participants {
+		//	c, ok := m.clients[p.ID]
+		//	if ok {
+		//		c.Egress <- clientMsg
+		//	}
+		//}
 
 		return nil
 
 	}
 }
-
-//func (m *Manager) startChatSession(ctx *gin.Context) {
-//	var request chat.InitSession
-//	if err := ctx.ShouldBindJSON(&request); err != nil {
-//		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-//		return
-//	}
-//
-//	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-//	defer cancel()
-//
-//	collection := GetCollection(m.mongoClient, "chat_sessions")
-//	// Sort the participants to ensure consistent query
-//	sort.Strings(request.Participants)
-//	// Check if a chat session with these participants already exists
-//	var existingSession chat.InitSession
-//	err := collection.FindOne(dbCtx, bson.M{"participants": request.Participants}).Decode(&existingSession)
-//
-//	if err != nil {
-//		if errors.Is(err, mongo.ErrNoDocuments) {
-//			// No existing session, go ahead to create new one
-//			// Your code for creating new session
-//			ctx.JSON(http.StatusOK, gin.H{"message": "New chat session started"})
-//			return
-//		}
-//		// Other errors
-//		ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-//		return
-//	}
-//	// Existing session found
-//	ctx.JSON(http.StatusConflict, gin.H{"message": "Chat session already exists", "session": existingSession})
-//
-//}

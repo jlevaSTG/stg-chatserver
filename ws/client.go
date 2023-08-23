@@ -46,6 +46,7 @@ func (c *Client) StartReadLoop(cmdStream chan Command) {
 		}
 
 		c.Connection.SetPongHandler(func(appData string) error {
+			//fmt.Println("pong")
 			return c.Connection.SetReadDeadline(time.Now().Add(pongWait))
 		})
 
@@ -74,14 +75,14 @@ func (c *Client) StartWriteLoop(cmdStream chan Command) {
 		}()
 		for {
 			select {
-			case cmd, ok := <-c.Egress:
+			case msg, ok := <-c.Egress:
 				if !ok {
 					if err := c.Connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
 						log.Println("connection closed: ", err)
 					}
 					return
 				}
-				data, err := json.Marshal(cmd)
+				data, err := json.Marshal(msg)
 				if err != nil {
 					log.Println(err)
 				}
@@ -90,6 +91,8 @@ func (c *Client) StartWriteLoop(cmdStream chan Command) {
 				}
 				log.Println("sent message")
 			case <-ticker.C:
+				//fmt.Println("ping")
+
 				if err := c.Connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Println("write Msg: ", err)
 					return

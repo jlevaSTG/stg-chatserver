@@ -26,7 +26,7 @@ func main() {
 	}
 
 	serverAPI := options.ServerAPI(options.ServerAPIVersion1)
-	opts := options.Client().ApplyURI("mongodb+srv://jleva:gmjnhoHk2vofz2S8@cabbage-order.ilyal.mongodb.net/?retryWrites=true&w=majority").SetServerAPIOptions(serverAPI)
+	opts := options.Client().ApplyURI("mongodb+srv://jleva:Wcdw8TzyKcGfgdzU@stg-chat.bio6fv4.mongodb.net/?retryWrites=true&w=majority").SetServerAPIOptions(serverAPI)
 
 	client, err := mongo.Connect(context.TODO(), opts)
 	if err != nil {

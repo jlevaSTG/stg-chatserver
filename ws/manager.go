@@ -5,8 +5,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
 	"net/http"
 	"stg-go-websocket-server/messages"
 	"sync"
@@ -32,17 +32,17 @@ type Manager struct {
 	currentClientCount int64
 	clients            map[string]*Client
 	handlers           map[string]CommandHandler
-	commandStream      chan Command
+	CommandStream      chan Command
 	IdCreator          IdCreator
-	mongoClient        *mongo.Client
+	MongoClient        *mongo.Client
 }
 
 func NewManager(mongoClient *mongo.Client) *Manager {
 	m := &Manager{
-		mongoClient:   mongoClient,
+		MongoClient:   mongoClient,
 		clients:       make(map[string]*Client),
-		commandStream: make(chan Command, 50),
-		IdCreator:     uuid.New().String,
+		CommandStream: make(chan Command, 50),
+		IdCreator:     func() string { return uuid.New().String() },
 	}
 	m.handlers = SetUpCommandHandlers(m)
 	m.startCmdLoop()
@@ -65,9 +65,11 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 	m.Lock()
 	m.clients[newClient.Id] = newClient
 	m.Unlock()
+	m.currentClientCount++
+	log.Info().Msgf("manager current client count: %d, clients %v", m.currentClientCount, m.clients)
 
-	newClient.StartWriteLoop(m.commandStream)
-	newClient.StartReadLoop(m.commandStream)
+	newClient.StartWriteLoop(m.CommandStream)
+	newClient.StartReadLoop(m.CommandStream)
 
 	msg := messages.Message{
 		MessageType: messages.ConnectionStatus,
@@ -84,7 +86,7 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 
 func (m *Manager) startCmdLoop() {
 	go func() {
-		for cmd := range m.commandStream {
+		for cmd := range m.CommandStream {
 			if handler, ok := m.handlers[cmd.CommandType]; ok {
 				if err := handler(cmd); err != nil {
 					log.Printf("Error executing command %v\n", err)
