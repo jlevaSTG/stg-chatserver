@@ -5,7 +5,7 @@ import "time"
 type Participant struct {
 	ID             string    `json:"id"`
 	Active         bool      `json:"active"`
-	AddedBy        string    `json:"added-by"`
+	AddedBy        string    `json:"added_by"`
 	JoinedAt       time.Time `json:"joinedAt"`
 	DisconnectedAt time.Time `json:"disconnectedAt"`
 }

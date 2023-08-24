@@ -5,7 +5,7 @@ import {
     IconGauge,
     IconDeviceDesktopAnalytics,
 } from '@tabler/icons-react';
-import {useQuery} from "@tanstack/react-query";
+import {useClientStore} from "../store/clientStore.ts";
 
 const useStyles = createStyles((theme) => ({
     wrapper: {
@@ -111,19 +111,10 @@ const mainLinksMockdata = [
     {icon: IconDeviceDesktopAnalytics, label: 'Analytics'},
 ];
 
-interface ManagerDetail {
-    serverDetail: { clients: CLientData[], numberOfClients: number };
-}
-
-interface CLientData {
-    client_id: string,
-    login_in_at: string
-}
-
-
 function SideNav() {
     const {classes, cx} = useStyles();
     const [active, setActive] = useState('Admin Dashboard');
+    const {clients, setActiveClient, activeClient} = useClientStore()
 
     const mainLinks = mainLinksMockdata.map((link) => (
         <Tooltip
@@ -143,26 +134,6 @@ function SideNav() {
     ));
 
 
-    const {data} = useQuery({
-            queryKey: ['clients'], queryFn: async () => {
-                try {
-                    const response = await fetch("/admin/stats");
-                    if (response.ok) {
-                        const data: ManagerDetail = await response.json();
-                        console.log("Data fetched:", data);
-                        return data.serverDetail.clients
-                    } else {
-                        console.log("Fetch Error:", response.statusText);
-                    }
-                } catch (error) {
-                    console.error("Error fetching data:", error);
-                }
-                return []
-            },
-        }
-    )
-
-
     return (
         <Navbar className={''} width={{sm: 400}}>
             <Navbar.Section grow className={classes.wrapper}>
@@ -178,11 +149,15 @@ function SideNav() {
                     </div>
 
                     {<ul role="list" className="divide-y divide-gray-100">
-                        {data?.map((client) => (
+                        {clients?.map((client) => (
                             <li key={client.client_id} className="relative flex justify-between gap-x-6 py-4">
                                 <div className="flex min-w-0 gap-x-4 ml-8">
-                                    <div className="min-w-0 flex-auto">
-                                        <p className="text-sm font-semibold leading-6 text-gray-900 cursor-pointer">
+                                    <div className="min-w-0 flex-auto"
+                                         onClick={() => setActiveClient(client.client_id)}>
+                                        <p className={client.client_id == activeClient?.client_id ? "text-sm font-semibold leading-6 text-gray-900 cursor-pointer text-blue-400" :
+                                            "text-sm font-semibold leading-6 text-gray-900 cursor-pointer"
+                                        }
+                                        >
                                             <span className="absolute inset-x-0 -top-px bottom-0"/>
                                             {client.client_id}
                                         </p>

@@ -8,7 +8,6 @@ function DashBoardHeader() {
                     className="h-16 w-16 flex-none rounded-full ring-1 ring-gray-900/10"
                 />
                 <h1>
-
                     <div className="mt-1 text-base leading-6 text-gray-700">Stg - Cargo Manager Chat Admin</div>
                 </h1>
             </div>

@@ -11,7 +11,7 @@ import {
 } from "react-router-dom";
 import "./index.css";
 import Root from "./root/Root.tsx";
-import Dashboard from "./Dashboard.tsx";
+import Dashboard from "./pages/Dashboard.tsx";
 
 const queryClient = new QueryClient()
 
