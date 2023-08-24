@@ -35,6 +35,7 @@ func (s *Server) setupRouter() {
 	r.Use(static.Serve("/", static.LocalFile("ws-front-end/dist/", true)))
 	api := r.Group("/ws")
 	api.GET("", s.manager.HandleWS)
+
 	routes.SetupApiRoutes("/api", r, s.manager)
 	routes.SetupAdminRoutes("/admin", r, s.manager)
 	s.router = r

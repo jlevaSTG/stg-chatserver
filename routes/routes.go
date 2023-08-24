@@ -22,28 +22,14 @@ func SetupApiRoutes(route string, r *gin.Engine, m *ws.Manager) {
 	api.GET("/retrieve/:userID", retrieveChat(m))
 }
 
-type RetrieveChat struct {
-	ChatSession []ChatSession `json:"chat_session"`
-}
-
-type ChatSession struct {
-	ChatId       string              `json:"chat_id"`
-	CreatedAt    time.Time           `json:"created_at"`
-	CreatedBy    string              `json:"created_by"`
-	Active       bool                `json:"active"`
-	Participants []types.Participant `json:"participants"`
-	ChatMessages []model.ChatMessage `json:"chat_messages"`
-}
-
 func retrieveChat(m *ws.Manager) gin.HandlerFunc {
 	return func(ginCtx *gin.Context) {
 		userID := ginCtx.Param("userID")
 
-		// Get MongoDB collection
 		sessions := ws.GetCollection(m.MongoClient, "chat_sessions")
 		dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		// Filter to find all sessions where userID is a participant
+
 		filter := bson.M{"participants": bson.M{"$elemMatch": bson.M{"id": userID}}}
 		cursor, err := sessions.Find(dbCtx, filter)
 
@@ -58,50 +44,8 @@ func retrieveChat(m *ws.Manager) gin.HandlerFunc {
 			return
 		}
 
-		ids := make([]string, 0)
-		for _, s := range chatSessions {
-			ids = append(ids, s.ChatId)
-		}
-		chatMessages := ws.GetCollection(m.MongoClient, "chat_messages")
-		filter = bson.M{"chat_id": bson.M{"$in": ids}}
-		cursor, err = chatMessages.Find(dbCtx, filter)
-
-		if err != nil {
-			ginCtx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve chat messages"})
-			return
-		}
-
-		var fetchedChatMessages []model.ChatMessage // Replace YourChatMessageModel with the actual model type
-		if err = cursor.All(dbCtx, &fetchedChatMessages); err != nil {
-			ginCtx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to decode chat messages"})
-			return
-		}
-
-		chatSessionReturn := make([]ChatSession, 0)
-		for _, s := range chatSessions {
-			chatSessionReturn = append(chatSessionReturn, ChatSession{
-				ChatId:       s.ChatId,
-				CreatedAt:    s.CreatedAt,
-				CreatedBy:    s.CreatedBy,
-				Active:       s.Active,
-				Participants: s.Participants,
-				ChatMessages: getMessages(fetchedChatMessages, s.ChatId),
-			})
-		}
-
-		// Use chatSessions...
-		ginCtx.JSON(http.StatusOK, gin.H{"chatSessions": chatSessionReturn})
+		ginCtx.JSON(http.StatusOK, gin.H{"chatSessions": chatSessions})
 	}
-}
-
-func getMessages(messages []model.ChatMessage, chatId string) []model.ChatMessage {
-	msg := make([]model.ChatMessage, 0)
-	for _, m := range messages {
-		if m.ChatID == chatId {
-			msg = append(msg, m)
-		}
-	}
-	return msg
 }
 
 func handleSendMsg(m *ws.Manager) gin.HandlerFunc {
@@ -121,7 +65,13 @@ func handleSendMsg(m *ws.Manager) gin.HandlerFunc {
 			return
 		}
 
-		_, err = createChatMessage(m.MongoClient, msgCmd, existingSession)
+		_, err = createChatMessage(m.MongoClient, msgCmd)
+		if err != nil {
+			ginCtx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err = mergeMessageToSession(m.MongoClient, msgCmd, existingSession)
 		if err != nil {
 			ginCtx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -130,6 +80,42 @@ func handleSendMsg(m *ws.Manager) gin.HandlerFunc {
 		sendCommand(m, msgCmd, existingSession)
 		ginCtx.JSON(http.StatusOK, gin.H{"chat": msgCmd})
 	}
+}
+
+func mergeMessageToSession(mongoClient *mongo.Client, cmd ws.TextMessageCommand, existingSession *model.ChatSession) error {
+	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	sessionCollection := ws.GetCollection(mongoClient, "chat_sessions")
+	filter := bson.M{"chat_id": existingSession.ChatId}
+	update := bson.M{
+		"$push": bson.M{
+			"messages": bson.M{
+				"$each": bson.A{model.ChatMessage{
+					MessageType: model.TextMessageType,
+					CreatedAt:   time.Now(),
+					ChatID:      cmd.ChatID,
+					CreatedBy:   cmd.CreatedBy,
+					Message:     cmd.Message,
+				}},
+				"$position": 0,
+				"$sort":     bson.M{"created_at": -1},
+				"$slice":    5, // Keep only the last 5 messages
+			},
+		},
+	}
+
+	_, err := sessionCollection.UpdateOne(
+		dbCtx,
+		filter,
+		update,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func bindJSON[T any](ginCtx *gin.Context, cmd T) error {
@@ -156,16 +142,11 @@ func findExistingSession(mongoClient *mongo.Client, chatID string) (*model.ChatS
 	return &existingSession, nil
 }
 
-func createChatMessage(mongoClient *mongo.Client, msgCmd ws.TextMessageCommand, existingSession *model.ChatSession) (*model.ChatMessage, error) {
+func createChatMessage(mongoClient *mongo.Client, msgCmd ws.TextMessageCommand) (*model.ChatMessage, error) {
 	dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	msg := &model.ChatMessage{
-		MessageType: model.TextMessageType,
-		ChatID:      msgCmd.ChatID,
-		CreatedBy:   msgCmd.CreatedBy,
-		Message:     msgCmd.Message,
-	}
+	msg := model.NewTextChatMessage(msgCmd.ChatID, msgCmd.CreatedBy, msgCmd.Message)
 
 	chatCollection := ws.GetCollection(mongoClient, "chat_messages")
 	_, err := chatCollection.InsertOne(dbCtx, msg)
@@ -173,7 +154,7 @@ func createChatMessage(mongoClient *mongo.Client, msgCmd ws.TextMessageCommand, 
 		return nil, err
 	}
 
-	return msg, nil
+	return &msg, nil
 }
 
 func sendCommand(m *ws.Manager, msgCmd ws.TextMessageCommand, existingSession *model.ChatSession) {
@@ -200,11 +181,9 @@ func handleChatInit(m *ws.Manager) gin.HandlerFunc {
 		defer cancel()
 
 		collection := ws.GetCollection(m.MongoClient, "chat_sessions")
-
 		// Sort the participants to ensure consistent query
 		ids := initCmd.ParticipantsIds()
 		sort.Strings(ids)
-
 		filter := bson.M{
 			"$and": []bson.M{
 				{"participants.id": bson.M{"$all": ids}},
@@ -214,30 +193,35 @@ func handleChatInit(m *ws.Manager) gin.HandlerFunc {
 
 		var existingSession model.ChatSession
 		err := collection.FindOne(dbCtx, filter).Decode(&existingSession)
-		if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+		if err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				log.Info().Msgf("no session found creating new chat: %v", initCmd)
+				initCmd.Participants = append(initCmd.Participants, types.Participant{Active: true, JoinedAt: time.Now(), ID: initCmd.ClientID})
+				s := model.NewChatSession(m.IdCreator(), initCmd.CreatedBy, initCmd.Participants, initCmd.Message)
+				if _, err := collection.InsertOne(dbCtx, s); err != nil {
+					log.Err(err).Msg("Failed to insert new chat session")
+				}
+
+				s.Participants = append(s.Participants, types.Participant{Active: true, JoinedAt: time.Now(), ID: initCmd.ClientID})
+				cmd := ws.NewCommand(ws.TextMessageCommandType, s.CreatedBy, ws.TextMessageCommand{
+					CreatedBy:       s.CreatedBy,
+					ChatID:          s.ChatId,
+					ParticipantsIds: s.Participants,
+					Message:         initCmd.Message,
+				})
+
+				m.CommandStream <- cmd
+				ginCtx.JSON(http.StatusCreated, gin.H{"chat": s})
+				return
+			}
+		}
+
+		if err != nil {
 			ginCtx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		if err == nil {
-			ginCtx.JSON(http.StatusBadRequest, gin.H{"error": "chat between participants already exists"})
-			return
-		}
-		log.Info().Msgf("no session found creating new chat: %v", initCmd)
+		ginCtx.JSON(http.StatusOK, gin.H{"chat": existingSession})
 
-		s := model.NewChatSession(m.IdCreator(), initCmd.CreatedBy, initCmd.Participants)
-		if _, err := collection.InsertOne(dbCtx, s); err != nil {
-			log.Err(err).Msg("Failed to insert new chat session")
-		}
-
-		cmd := ws.NewCommand(ws.TextMessageCommandType, s.CreatedBy, ws.TextMessageCommand{
-			CreatedBy:       s.CreatedBy,
-			ChatID:          s.ChatId,
-			ParticipantsIds: s.Participants,
-			Message:         initCmd.Message,
-		})
-
-		m.CommandStream <- cmd
-		ginCtx.JSON(http.StatusCreated, gin.H{"chat": s})
 	}
 }

@@ -89,9 +89,11 @@ func handleTextMessageCommand(m *Manager) CommandHandler {
 
 			clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)
 			for _, p := range payload.ParticipantsIds {
-				c, ok := m.Clients[p.ID]
-				if ok {
-					c.Egress <- clientMsg
+				if p.ID != chatMsg.SentBy {
+					c, ok := m.Clients[p.ID]
+					if ok {
+						c.Egress <- clientMsg
+					}
 				}
 			}
 		default:
@@ -123,27 +125,6 @@ func removeClientCommandHandlers(m *Manager) CommandHandler {
 		default:
 			return errors.New("text command sent with wrong payload type")
 		}
-		return nil
-		//var disconnect DisconnectCommand
-		//if err := json.Unmarshal(cmd.Payload, &disconnect); err != nil {
-		//	return err
-		//}
-		//
-		//clientId := disconnect.ClientID
-		//log.Info().Msgf("removing client %s\n", clientId)
-		//
-		//m.Lock()
-		//client, ok := m.Clients[clientId]
-		//if ok {
-		//	delete(m.Clients, clientId)
-		//	err := client.Connection.Close()
-		//	if err != nil {
-		//		return err
-		//	}
-		//}
-		//m.CurrentClientCount--
-		//m.Unlock()
-		//log.Info().Msgf("manager current client count: %d, Clients %v", m.CurrentClientCount, m.Clients)
 		return nil
 	}
 
