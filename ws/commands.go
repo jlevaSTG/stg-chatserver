@@ -2,6 +2,7 @@ package ws
 
 import (
 	"errors"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 	"stg-go-websocket-server/messages"
 	"stg-go-websocket-server/types"
@@ -49,6 +50,14 @@ type TextMessageCommand struct {
 	Message         string              `json:"message"`
 }
 
+type RetrieveChatCommand struct {
+	USerID string `json:"userID"`
+}
+
+type RetrieveChatMessagesCommand struct {
+	ChatIDS []string `json:"chat_ids"`
+}
+
 type DisconnectCommand struct {
 	ClientID string `json:"id"`
 }
@@ -80,7 +89,7 @@ func handleTextMessageCommand(m *Manager) CommandHandler {
 
 			clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)
 			for _, p := range payload.ParticipantsIds {
-				c, ok := m.clients[p.ID]
+				c, ok := m.Clients[p.ID]
 				if ok {
 					c.Egress <- clientMsg
 				}
@@ -94,6 +103,27 @@ func handleTextMessageCommand(m *Manager) CommandHandler {
 
 func removeClientCommandHandlers(m *Manager) CommandHandler {
 	return func(cmd Command) error {
+		switch payload := cmd.Payload.(type) {
+		case DisconnectCommand:
+			clientId := payload.ClientID
+			log.Info().Msgf("removing client %s", clientId)
+
+			m.Lock()
+			client, ok := m.Clients[clientId]
+			if ok {
+				delete(m.Clients, clientId)
+				err := client.Connection.Close()
+				if err != nil {
+					return err
+				}
+			}
+			m.CurrentClientCount--
+			m.Unlock()
+			log.Info().Msgf("manager current client count: %d, Clients %v", m.CurrentClientCount, m.Clients)
+		default:
+			return errors.New("text command sent with wrong payload type")
+		}
+		return nil
 		//var disconnect DisconnectCommand
 		//if err := json.Unmarshal(cmd.Payload, &disconnect); err != nil {
 		//	return err
@@ -103,17 +133,17 @@ func removeClientCommandHandlers(m *Manager) CommandHandler {
 		//log.Info().Msgf("removing client %s\n", clientId)
 		//
 		//m.Lock()
-		//client, ok := m.clients[clientId]
+		//client, ok := m.Clients[clientId]
 		//if ok {
-		//	delete(m.clients, clientId)
+		//	delete(m.Clients, clientId)
 		//	err := client.Connection.Close()
 		//	if err != nil {
 		//		return err
 		//	}
 		//}
-		//m.currentClientCount--
+		//m.CurrentClientCount--
 		//m.Unlock()
-		//log.Info().Msgf("manager current client count: %d, clients %v", m.currentClientCount, m.clients)
+		//log.Info().Msgf("manager current client count: %d, Clients %v", m.CurrentClientCount, m.Clients)
 		return nil
 	}
 

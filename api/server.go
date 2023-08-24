@@ -36,6 +36,7 @@ func (s *Server) setupRouter() {
 	api := r.Group("/ws")
 	api.GET("", s.manager.HandleWS)
 	routes.SetupApiRoutes("/api", r, s.manager)
+	routes.SetupAdminRoutes("/admin", r, s.manager)
 	s.router = r
 }
 

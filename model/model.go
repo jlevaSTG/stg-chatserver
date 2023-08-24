@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+type MessageType string
+
+var (
+	TextMessageType MessageType = "text_message"
+)
+
 type ChatSession struct {
 	ID           primitive.ObjectID  `bson:"_id,omitempty" json:"-"`
 	ChatId       string              `bson:"chat_id"`
@@ -32,9 +38,10 @@ func NewChatSession(chatId string, createdBY string, participants []types.Partic
 }
 
 type ChatMessage struct {
-	MessageType string `json:"message_type" bson:"message_type"`
-	ChatId      string `json:"chat_id" bson:"chat_id"`
-	SentBy      string `json:"sent_by" bson:"sent_by"`
-	Message     string `json:"message" bson:"message"`
-	ResourceUrl string `json:"resource_url" bson:"resource_url"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"-"`
+	MessageType MessageType        `json:"message_type" bson:"message_type"`
+	ChatID      string             `json:"chat_id" bson:"chat_id"`
+	CreatedBy   string             `json:"created_by" bson:"created_by"`
+	Message     string             `json:"message" bson:"message"`
+	ResourceUrl string             `json:"resource_url" bson:"resource_url"`
 }

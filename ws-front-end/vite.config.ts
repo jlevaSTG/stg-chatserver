@@ -15,6 +15,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: false // You can explicitly set this to false for clarity, although it's the default
         },
+        '/admin': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          ws: false // You can explicitly set this to false for clarity, although it's the default
+        },
         '/ws': {
           target: 'ws://localhost:8080',
           ws: true

@@ -46,7 +46,6 @@ func (c *Client) StartReadLoop(cmdStream chan Command) {
 		}
 
 		c.Connection.SetPongHandler(func(appData string) error {
-			//fmt.Println("pong")
 			return c.Connection.SetReadDeadline(time.Now().Add(pongWait))
 		})
 
@@ -67,7 +66,7 @@ func (c *Client) StartReadLoop(cmdStream chan Command) {
 	}()
 }
 
-func (c *Client) StartWriteLoop(cmdStream chan Command) {
+func (c *Client) StartWriteLoop() {
 	ticker := time.NewTicker(pingInterval)
 	go func() {
 		defer func() {
@@ -92,7 +91,6 @@ func (c *Client) StartWriteLoop(cmdStream chan Command) {
 				log.Println("sent message")
 			case <-ticker.C:
 				//fmt.Println("ping")
-
 				if err := c.Connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Println("write Msg: ", err)
 					return
@@ -103,10 +101,6 @@ func (c *Client) StartWriteLoop(cmdStream chan Command) {
 }
 
 func (c *Client) disconnect(cmdStream chan Command) {
-	data, err := json.Marshal(DisconnectCommand{ClientID: c.Id})
-	if err != nil {
-		log.Println(err)
-	}
-	cmd := Command{CommandType: DisconnectClientCommandType, Payload: data}
+	cmd := Command{CommandType: DisconnectClientCommandType, Payload: DisconnectCommand{ClientID: c.Id}}
 	cmdStream <- cmd
 }

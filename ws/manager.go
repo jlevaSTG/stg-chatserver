@@ -29,8 +29,8 @@ type IdCreator = func() string
 
 type Manager struct {
 	sync.RWMutex
-	currentClientCount int64
-	clients            map[string]*Client
+	CurrentClientCount int64
+	Clients            map[string]*Client
 	handlers           map[string]CommandHandler
 	CommandStream      chan Command
 	IdCreator          IdCreator
@@ -40,7 +40,7 @@ type Manager struct {
 func NewManager(mongoClient *mongo.Client) *Manager {
 	m := &Manager{
 		MongoClient:   mongoClient,
-		clients:       make(map[string]*Client),
+		Clients:       make(map[string]*Client),
 		CommandStream: make(chan Command, 50),
 		IdCreator:     func() string { return uuid.New().String() },
 	}
@@ -63,12 +63,12 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 
 	newClient := NewClient(userID, conn)
 	m.Lock()
-	m.clients[newClient.Id] = newClient
+	m.Clients[newClient.Id] = newClient
 	m.Unlock()
-	m.currentClientCount++
-	log.Info().Msgf("manager current client count: %d, clients %v", m.currentClientCount, m.clients)
+	m.CurrentClientCount++
+	log.Info().Msgf("manager current client count: %d, Clients %v", m.CurrentClientCount, m.Clients)
 
-	newClient.StartWriteLoop(m.CommandStream)
+	newClient.StartWriteLoop()
 	newClient.StartReadLoop(m.CommandStream)
 
 	msg := messages.Message{
@@ -89,10 +89,10 @@ func (m *Manager) startCmdLoop() {
 		for cmd := range m.CommandStream {
 			if handler, ok := m.handlers[cmd.CommandType]; ok {
 				if err := handler(cmd); err != nil {
-					log.Printf("Error executing command %v\n", err)
+					log.Printf("Error executing command %v %v", err, cmd)
 				}
 			} else {
-				log.Printf("Error executing command %v\n", ErrEventNotSupported)
+				log.Err(ErrEventNotSupported)
 			}
 		}
 	}()
