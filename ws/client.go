@@ -2,9 +2,11 @@ package ws
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/gorilla/websocket"
 	"log"
 	"stg-go-websocket-server/messages"
+	"stg-go-websocket-server/util"
 	"time"
 )
 
@@ -21,23 +23,27 @@ type Client struct {
 	Id         string
 	Joined     time.Time
 	Connection *websocket.Conn
+	CloseChan  chan struct{}
+	cmdStream  chan Command
 	Egress     chan messages.Message
 }
 
-func NewClient(id string, connection *websocket.Conn) *Client {
+func NewClient(id string, connection *websocket.Conn, cmdStream chan Command) *Client {
 	return &Client{
 		Id:         id,
 		Joined:     time.Now(),
 		Connection: connection,
+		CloseChan:  make(chan struct{}),
+		cmdStream:  cmdStream,
 		Egress:     make(chan messages.Message),
 	}
 
 }
 
-func (c *Client) StartReadLoop(cmdStream chan Command) {
+func (c *Client) StartReadLoop() {
 	go func() {
 		defer func() {
-			c.disconnect(cmdStream)
+			c.disconnect()
 		}()
 
 		if err := c.Connection.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
@@ -61,20 +67,22 @@ func (c *Client) StartReadLoop(cmdStream chan Command) {
 			if err := json.Unmarshal(payload, &cmd); err != nil {
 				log.Printf("error marshalling message: %v", err)
 			}
-			cmdStream <- cmd
+
 		}
 	}()
 }
 
 func (c *Client) StartWriteLoop() {
 	ticker := time.NewTicker(pingInterval)
+	orDone := util.OrDone(c.CloseChan, c.Egress)
 	go func() {
 		defer func() {
 			ticker.Stop()
+			c.disconnect()
 		}()
 		for {
 			select {
-			case msg, ok := <-c.Egress:
+			case msg, ok := <-orDone:
 				if !ok {
 					if err := c.Connection.WriteMessage(websocket.CloseMessage, nil); err != nil {
 						log.Println("connection closed: ", err)
@@ -93,6 +101,10 @@ func (c *Client) StartWriteLoop() {
 				//fmt.Println("ping")
 				if err := c.Connection.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 					log.Println("write Msg: ", err)
+					if errors.Is(err, websocket.ErrCloseSent) {
+						log.Println("CLient disconnect stopping ping")
+						return
+					}
 					return
 				}
 			}
@@ -100,7 +112,7 @@ func (c *Client) StartWriteLoop() {
 	}()
 }
 
-func (c *Client) disconnect(cmdStream chan Command) {
+func (c *Client) disconnect() {
 	cmd := Command{CommandType: DisconnectClientCommandType, Payload: DisconnectCommand{ClientID: c.Id}}
-	cmdStream <- cmd
+	c.cmdStream <- cmd
 }

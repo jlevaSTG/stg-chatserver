@@ -44,6 +44,7 @@ type InitChatCommand struct {
 }
 
 type TextMessageCommand struct {
+	CreatedAt       time.Time           `json:"created_at"`
 	CreatedBy       string              `json:"created_by"`
 	ChatID          string              `json:"chat_id"`
 	ParticipantsIds []types.Participant `json:"participants"`
@@ -82,9 +83,10 @@ func handleTextMessageCommand(m *Manager) CommandHandler {
 		switch payload := cmd.Payload.(type) {
 		case TextMessageCommand:
 			chatMsg := messages.ChatMessage{
-				ChatId:  payload.ChatID,
-				SentBy:  payload.CreatedBy,
-				Message: payload.Message,
+				CreatedAt: payload.CreatedAt,
+				ChatId:    payload.ChatID,
+				SentBy:    payload.CreatedBy,
+				Message:   payload.Message,
 			}
 
 			clientMsg := messages.NewMessage(messages.TextChatMessage, chatMsg)

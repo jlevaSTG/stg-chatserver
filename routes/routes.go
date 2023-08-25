@@ -100,7 +100,7 @@ func mergeMessageToSession(mongoClient *mongo.Client, cmd ws.TextMessageCommand,
 				}},
 				"$position": 0,
 				"$sort":     bson.M{"created_at": -1},
-				"$slice":    5, // Keep only the last 5 messages
+				"$slice":    100, // Keep only the last 5 messages
 			},
 		},
 	}
@@ -158,12 +158,14 @@ func createChatMessage(mongoClient *mongo.Client, msgCmd ws.TextMessageCommand) 
 }
 
 func sendCommand(m *ws.Manager, msgCmd ws.TextMessageCommand, existingSession *model.ChatSession) {
-	cmd := ws.NewCommand(ws.TextMessageCommandType, msgCmd.CreatedBy, ws.TextMessageCommand{
-		CreatedBy:       msgCmd.CreatedBy,
-		ChatID:          msgCmd.ChatID,
-		ParticipantsIds: existingSession.Participants,
-		Message:         msgCmd.Message,
-	})
+	cmd := ws.NewCommand(ws.TextMessageCommandType, msgCmd.CreatedBy,
+		ws.TextMessageCommand{
+			CreatedBy:       msgCmd.CreatedBy,
+			CreatedAt:       time.Now(),
+			ChatID:          msgCmd.ChatID,
+			ParticipantsIds: existingSession.Participants,
+			Message:         msgCmd.Message,
+		})
 	m.CommandStream <- cmd
 }
 
@@ -177,11 +179,12 @@ func handleChatInit(m *ws.Manager) gin.HandlerFunc {
 
 		log.Info().Msgf("init chat for cmd: %v", initCmd)
 
-		dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		dbCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 
 		collection := ws.GetCollection(m.MongoClient, "chat_sessions")
 		// Sort the participants to ensure consistent query
+		initCmd.Participants = append(initCmd.Participants, types.Participant{Active: true, JoinedAt: time.Now(), ID: initCmd.ClientID})
 		ids := initCmd.ParticipantsIds()
 		sort.Strings(ids)
 		filter := bson.M{
@@ -196,13 +199,12 @@ func handleChatInit(m *ws.Manager) gin.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, mongo.ErrNoDocuments) {
 				log.Info().Msgf("no session found creating new chat: %v", initCmd)
-				initCmd.Participants = append(initCmd.Participants, types.Participant{Active: true, JoinedAt: time.Now(), ID: initCmd.ClientID})
+
 				s := model.NewChatSession(m.IdCreator(), initCmd.CreatedBy, initCmd.Participants, initCmd.Message)
 				if _, err := collection.InsertOne(dbCtx, s); err != nil {
 					log.Err(err).Msg("Failed to insert new chat session")
 				}
 
-				s.Participants = append(s.Participants, types.Participant{Active: true, JoinedAt: time.Now(), ID: initCmd.ClientID})
 				cmd := ws.NewCommand(ws.TextMessageCommandType, s.CreatedBy, ws.TextMessageCommand{
 					CreatedBy:       s.CreatedBy,
 					ChatID:          s.ChatId,

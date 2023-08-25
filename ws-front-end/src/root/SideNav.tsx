@@ -1,11 +1,12 @@
 import {useState} from 'react';
-import {createStyles, Navbar, UnstyledButton, Tooltip, rem} from '@mantine/core';
+import {createStyles, Navbar, Tooltip, rem} from '@mantine/core';
 
 import {
     IconGauge,
-    IconDeviceDesktopAnalytics,
+    IconMessage,
 } from '@tabler/icons-react';
 import {useClientStore} from "../store/clientStore.ts";
+import {NavLink} from "react-router-dom";
 
 const useStyles = createStyles((theme) => ({
     wrapper: {
@@ -107,8 +108,8 @@ const useStyles = createStyles((theme) => ({
 }));
 
 const mainLinksMockdata = [
-    {icon: IconGauge, label: 'Admin Dashboard'},
-    {icon: IconDeviceDesktopAnalytics, label: 'Analytics'},
+    {icon: IconGauge, label: 'Admin Dashboard', to: ""},
+    {icon: IconMessage, label: 'Admin Chat', to: "rooms"},
 ];
 
 function SideNav() {
@@ -124,12 +125,13 @@ function SideNav() {
             transitionProps={{duration: 0}}
             key={link.label}
         >
-            <UnstyledButton
+            <NavLink
+                to={link.to}
                 onClick={() => setActive(link.label)}
                 className={cx(classes.mainLink, {[classes.mainLinkActive]: link.label === active})}
             >
                 <link.icon size="1.4rem" stroke={1.5}/>
-            </UnstyledButton>
+            </NavLink>
         </Tooltip>
     ));
 
@@ -154,7 +156,7 @@ function SideNav() {
                                 <div className="flex min-w-0 gap-x-4 ml-8">
                                     <div className="min-w-0 flex-auto"
                                          onClick={() => setActiveClient(client.client_id)}>
-                                        <p className={client.client_id == activeClient?.client_id ? "text-sm font-semibold leading-6 text-gray-900 cursor-pointer text-blue-400" :
+                                        <p className={client.client_id == activeClient?.client_id ? "text-sm font-semibold leading-6 cursor-pointer text-blue-400" :
                                             "text-sm font-semibold leading-6 text-gray-900 cursor-pointer"
                                         }
                                         >

@@ -61,7 +61,7 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 		return
 	}
 
-	newClient := NewClient(userID, conn)
+	newClient := NewClient(userID, conn, m.CommandStream)
 	m.Lock()
 	m.Clients[newClient.Id] = newClient
 	m.Unlock()
@@ -69,7 +69,7 @@ func (m *Manager) HandleWS(ctx *gin.Context) {
 	log.Info().Msgf("manager current client count: %d, Clients %v", m.CurrentClientCount, m.Clients)
 
 	newClient.StartWriteLoop()
-	newClient.StartReadLoop(m.CommandStream)
+	newClient.StartReadLoop()
 
 	msg := messages.Message{
 		MessageType: messages.ConnectionStatus,

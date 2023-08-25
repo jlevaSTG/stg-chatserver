@@ -26,11 +26,11 @@ export interface Session {
     created_at: string
     created_by: string
     active: boolean
-    participants: Participants[]
+    participants: Participant[]
     messages: Messages[]
 }
 
-export interface Participants {
+export interface Participant {
     id: string
     active: boolean
     added_by: string
@@ -45,7 +45,6 @@ export interface Messages {
     created_by: string
     message: string
 }
-
 
 export const useClientStore = create<ClientStore>((set) => ({
     clients: [],

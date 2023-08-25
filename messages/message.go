@@ -23,10 +23,11 @@ type UserConnectionStatus struct {
 }
 
 type ChatMessage struct {
-	ChatId      string `json:"chat_id" bson:"chat_id"`
-	SentBy      string `json:"sent_by" bson:"sent_by"`
-	Message     string `json:"message" bson:"message"`
-	ResourceUrl string `json:"resource_url" bson:"resource_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	ChatId      string    `json:"chat_id" bson:"chat_id"`
+	SentBy      string    `json:"sent_by" bson:"sent_by"`
+	Message     string    `json:"message" bson:"message"`
+	ResourceUrl string    `json:"resource_url" bson:"resource_url"`
 }
 
 func NewMessage(messageType string, payload interface{}) Message {

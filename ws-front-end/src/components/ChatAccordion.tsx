@@ -18,7 +18,7 @@ const useStyles = createStyles((theme) => ({
         '&[data-active]': {
             transform: 'scale(1.03)',
             backgroundColor: theme.colorScheme === 'dark' ? theme.colors.dark[7] : theme.white,
-            boxShadow: theme.shadows.md,
+            boxShadow: theme.shadows.xl,
             borderColor: theme.colorScheme === 'dark' ? theme.colors.dark[4] : theme.colors.gray[2],
             borderRadius: theme.radius.md,
             zIndex: 1,
@@ -46,6 +46,7 @@ export default function ChatAccordion() {
             mx="auto"
             variant="filled"
             classNames={classes}
+            onChange={() => setActiveSession("")}
 
             className={classes.root}
         >

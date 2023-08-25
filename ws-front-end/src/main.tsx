@@ -12,6 +12,7 @@ import {
 import "./index.css";
 import Root from "./root/Root.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
+import AdminChat from "./pages/AdminChat.tsx";
 
 const queryClient = new QueryClient()
 
@@ -23,6 +24,10 @@ const router = createBrowserRouter([
             {
                 path: "/",
                 element: <Dashboard/>
+            },
+            {
+                path: "/rooms",
+                element: <AdminChat />
             }
         ]
     },
@@ -31,7 +36,6 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     <MantineProvider withGlobalStyles withNormalizeCSS>
         <QueryClientProvider client={queryClient}>
-
             <RouterProvider router={router}/>
         </QueryClientProvider>
     </MantineProvider>
